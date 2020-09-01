@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 static amd_dbgapi_callbacks_t callbacks;
 static amd_dbgapi_process_id_t self;
@@ -135,6 +137,30 @@ void debug_init() {
 	check_status(ret, __LINE__);	
 }
 
+void dumpCodeObject(char* uri) {
+	// URI example: memory://154772#offset=0x2aaed80ad1f0&size=41688
+	if (strncmp(uri, "memory", strlen("memory")) == 0) {
+		char* index = strstr(uri, "offset=") + strlen("offset=");
+		char* endptr;
+		unsigned long long offset = strtoull(index, &endptr, 16);
+		
+		index = strstr(uri, "size=") + strlen("size=");
+		unsigned long int size = strtoul(index, &endptr, 10);
+		fprintf(stderr, "\toffset %lx, size %lx\n", offset, size);
+
+		int fd;
+		fd = open("amd_gpu_binary", O_WRONLY | O_CREAT | O_TRUNC | O_EXCL, 0644);
+		if (fd < 0) {
+			fprintf(stderr, "Fail to create file\n");
+			return;	
+		}
+		write(fd, (const void*)offset, size);
+		close(fd);
+	} else {
+		fprintf(stderr, "Unhandled URI: %s\n", uri);
+	}	
+}
+
 void queryCodeObject() { 	
 	size_t code_object_count;	
 	amd_dbgapi_code_object_id_t *code_objects_id;
@@ -150,6 +176,7 @@ void queryCodeObject() {
 				(void*)(&uri));
 		check_status(ret, __LINE__);
 		fprintf(stderr, "uri %s\n", uri);
+		dumpCodeObject(uri);
 	}
 }
 
@@ -168,11 +195,9 @@ void api_callback(
 	if (cid != HIP_API_ID_hipLaunchKernel) return;
 	if (counter == 0) {
 		debug_init();
+		queryCodeObject();
 	}
 	counter ++;
-	fprintf(stderr, "api_callback count %d\n", counter);
-	queryCodeObject();
-
 }
 
 void init() {
