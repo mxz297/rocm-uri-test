@@ -104,6 +104,10 @@ void check_status(amd_dbgapi_status_t ret, int lineNo) {
 		fprintf(stderr, "invalid argument");
 	} else if (ret == AMD_DBGAPI_STATUS_ERROR_CLIENT_CALLBACK) {
 		fprintf(stderr, "error client callback");
+	} else if (ret == AMD_DBGAPI_STATUS_ERROR_INVALID_CODE_OBJECT_ID) {
+		fprintf(stderr, "invalid code object id\n");
+	} else if (ret == AMD_DBGAPI_STATUS_ERROR_INVALID_ARGUMENT_SIZE) {
+		fprintf(stderr, "invalid argument size\n");
 	} else {
 		fprintf(stderr, "unknown ret");
 	}
@@ -131,19 +135,19 @@ void debug_init() {
 	check_status(ret, __LINE__);	
 }
 
-void queryCodeObject() {
-	char uri[1024];
+void queryCodeObject() { 	
 	size_t code_object_count;	
 	amd_dbgapi_code_object_id_t *code_objects_id;
 	amd_dbgapi_status_t ret = amd_dbgapi_code_object_list(self, &code_object_count, &code_objects_id, NULL);
 	check_status(ret, __LINE__);
 	fprintf(stderr, "code object count %u\n", code_object_count);
 	for (size_t i = 0; i < code_object_count; ++i) {
+		char* uri;
 		ret = amd_dbgapi_code_object_get_info(self, 
 				code_objects_id[i],
 				AMD_DBGAPI_CODE_OBJECT_INFO_URI_NAME,
-				1024,
-				(void*)uri);
+				sizeof(char*),
+				(void*)(&uri));
 		check_status(ret, __LINE__);
 		fprintf(stderr, "uri %s\n", uri);
 	}
