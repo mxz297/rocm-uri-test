@@ -201,7 +201,7 @@ void api_callback(
 }
 
 void init() {
-      
+	setenv("HIP_ENABLE_DEFERRED_LOADING", "0", 1);
 	roctracer_set_properties(ACTIVITY_DOMAIN_HIP_API, NULL);
       	// Allocating tracing pool
 	roctracer_properties_t properties;
