@@ -137,28 +137,66 @@ void debug_init() {
 	check_status(ret, __LINE__);	
 }
 
-void dumpCodeObject(char* uri) {
-	// URI example: memory://154772#offset=0x2aaed80ad1f0&size=41688
-	if (strncmp(uri, "memory", strlen("memory")) == 0) {
-		char* index = strstr(uri, "offset=") + strlen("offset=");
-		char* endptr;
-		unsigned long long offset = strtoull(index, &endptr, 16);
-		
-		index = strstr(uri, "size=") + strlen("size=");
-		unsigned long int size = strtoul(index, &endptr, 10);
-		fprintf(stderr, "\toffset %lx, size %lx\n", offset, size);
+void debug_fini() {
+	amd_dbgapi_status_t ret = amd_dbgapi_process_detach(self);
+	check_status(ret, __LINE__);
+}
 
-		int fd;
-		fd = open("amd_gpu_binary", O_WRONLY | O_CREAT | O_TRUNC | O_EXCL, 0644);
-		if (fd < 0) {
-			fprintf(stderr, "Fail to create file\n");
-			return;	
-		}
-		write(fd, (const void*)offset, size);
-		close(fd);
-	} else {
-		fprintf(stderr, "Unhandled URI: %s\n", uri);
-	}	
+void dumpCodeObject(char* uri) {
+	// Memory URI example: memory://154772#offset=0x2aaed80ad1f0&size=41688
+	if (strncmp(uri, "memory://", strlen("memory://")) == 0) {
+		fprintf(stderr, "\t do not record memory uri\n");
+		return;
+	}
+	if (strncmp(uri, "file://", strlen("file://")) != 0) {
+		fprintf(stderr, "\t not memory nor file URI\n");
+		return;
+	}
+
+	// File URI example: file:///home/users/coe0173/HIP-Examples/HIP-Examples-Applications/FloydWarshall/FloydWarshall#offset=26589&size=31088
+	char* filepath = uri + strlen("file://");
+	char* filepath_end = filepath;
+	while (*filepath_end != '#' && *filepath_end != '?')
+		++filepath_end;
+	*filepath_end = 0;
+	char* uri_suffix = filepath_end + 1;
+	char* index = strstr(uri_suffix, "offset=") + strlen("offset=");
+	char* endptr;
+	unsigned long long offset = strtoull(index, &endptr, 10);
+	
+	index = strstr(uri_suffix, "size=") + strlen("size=");
+	unsigned long int size = strtoul(index, &endptr, 10);
+	fprintf(stderr, "\tfilepath %s\n", filepath);
+	fprintf(stderr, "\toffset %lx, size %lx\n", offset, size);
+	char* filename = strrchr(filepath, '/') + 1;
+	char gpu_file_name[1024];
+	snprintf(gpu_file_name, 1024, "%s-%lx", filename, offset);
+	// We directly return if we have write down this URI
+	int wfd;	
+	wfd = open(gpu_file_name, O_WRONLY | O_CREAT | O_EXCL, 0644);
+	if (wfd < 0) {
+		fprintf(stderr, "\tFile already exists\n");
+		return;	
+	}
+
+
+	int rfd = open(filepath, O_RDONLY);
+	if (rfd < 0) {
+		fprintf(stderr, "\tcannot open the file specified in the file URI\n");
+		return;
+	}
+	if (lseek(rfd, offset, SEEK_SET) < 0) {
+		fprintf(stderr, "\tcannot seek to the offset\n");
+		return;
+	}
+	
+	char* buf = (char*)malloc(size);
+	if (read(rfd, buf, size) != size) {
+		fprintf(stderr, "\tfail to read file\n");
+		return;
+	}
+	write(wfd, (const void*)buf, size);
+	close(wfd);
 }
 
 void queryCodeObject() { 	
@@ -196,6 +234,7 @@ void api_callback(
 	if (counter == 0) {
 		debug_init();
 		queryCodeObject();
+		debug_fini();
 	}
 	counter ++;
 }
